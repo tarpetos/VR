@@ -4,8 +4,9 @@ let gl;                         // The webgl context.
 let surface;                    // A surface model
 let surfaceWebCam;              // A substrate for webcam image
 let shProgram;                  // A shader program
-let spaceball;                  // A SimpleRotator object that lets the user rotate the view by mouse.
+let spaceball;                  // A TrackballRotator object
 let stereoCam;                  // Object holding stereo camera and its parameters
+let ws;                         // WebSocket for sensor data
 
 let iTextureWebCam = -1;
 let video;
@@ -19,45 +20,32 @@ window.renderingParams = {
     convergence: 9.0,
 };
 
-// Constructor
 function ShaderProgram(name, program, bgProgram) {
     this.name = name;
     this.prog = program;
     this.bgProgram = bgProgram;
 
-    // Location of the attribute variable in the shader program.
     this.iAttribVertex = -1;
-    // Location of the uniform specifying a color for the primitive.
     this.iColor = -1;
-    // Location of the uniform matrix representing the combined transformation.
-    this.iModelViewProjectionMatrix = -1;
+    this.iModelViewMatrix = -1;
+    this.iProjectionMatrix = -1;
 
     this.Use = function(progType) {
-        if(progType == "main"){
-            gl.useProgram(this.prog);
-        }
-        if(progType == "background"){
-            gl.useProgram(this.bgProgram);
-        }
-    }
+        if (progType === "main") gl.useProgram(this.prog);
+        if (progType === "background") gl.useProgram(this.bgProgram);
+    };
 }
 
-/* Draws a colored cube, along with a set of coordinate axes.
- * (Note that the use of the above drawPrimitive function is not an efficient
- * way to draw with WebGL.  Here, the geometry is so simple that it doesn"t matter.)
- */
 function draw() {
     gl.clearColor(0, 0, 0, 1);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-    // PATH ZERO: DRAW ZERO PARALLAX WEBCAM
     if (iTextureWebCam >= 0) {
         gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, video);
     }
 
     let matrOrth = m4.orthographic(0, 1, 0, 1, 8, 20);
 
-    // Draw background video if available
     if (webcamElement && webcamElement.videoWidth > 0) {
         drawVideoBackground();
     }
@@ -67,8 +55,12 @@ function draw() {
     surface = new Model("Surface");
     surface.BufferData(data.verticesF32, data.indicesU16);
 
-    /* Get the view matrix from the SimpleRotator object.*/
     let modelView = spaceball.getViewMatrix();
+
+    let sensorRotation = getSensorRotationMatrix();
+    if (sensorRotation) {
+        modelView = m4.multiply(sensorRotation, modelView);
+    }
 
     let rotateToPointZero = m4.axisRotation([0.707, 0.707, 0], 0.7);
     let translateToPointZero = m4.translation(0, 0, -10);
@@ -76,7 +68,6 @@ function draw() {
     const colorPolygon = new Float32Array([0.5, 0.5, 0.5, 1]);
     const colorEdge = new Float32Array([1, 1, 1, 1]);
 
-    // The FIRST PASS (for the left eye)
     let matrLeftFrustum = stereoCam.calcLeftFrustum();
     gl.uniformMatrix4fv(shProgram.iProjectionMatrix, false, matrLeftFrustum);
 
@@ -96,7 +87,6 @@ function draw() {
     gl.uniform4fv(shProgram.iColor, colorEdge);
     surface.DrawWireframe();
 
-    // The SECOND PASS (for the right eye)
     gl.clear(gl.DEPTH_BUFFER_BIT);
 
     let matrRightFrustum = stereoCam.calcRightFrustum();
@@ -115,7 +105,6 @@ function draw() {
     gl.uniform4fv(shProgram.iColor, colorEdge);
     surface.DrawWireframe();
 
-    // RESET specific params to their default state
     gl.disable(gl.POLYGON_OFFSET_FILL);
     gl.colorMask(true, true, true, true);
 }
@@ -126,7 +115,6 @@ async function initWebcam() {
         const stream = await navigator.mediaDevices.getUserMedia({ video: true });
         webcamElement.srcObject = stream;
 
-        // Create and set up video texture
         videoTexture = gl.createTexture();
         gl.bindTexture(gl.TEXTURE_2D, videoTexture);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
@@ -170,11 +158,9 @@ function drawVideoBackground() {
 
     shProgram.Use("background");
 
-    // Set up a simple quad for the background
     const vertices = new Float32Array([1, 1, -1, 1, 1, -1, -1, -1]);
     const texCoords = new Float32Array([0, 0, 1, 0, 0, 1, 1, 1]);
 
-    // Create and bind buffers
     const vertexBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
@@ -183,7 +169,6 @@ function drawVideoBackground() {
     gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, texCoords, gl.STATIC_DRAW);
 
-    // Set up attributes
     const positionLoc = gl.getAttribLocation(shProgram.bgProgram, "position");
     const texCoordLoc = gl.getAttribLocation(shProgram.bgProgram, "texCoord");
 
@@ -195,18 +180,14 @@ function drawVideoBackground() {
     gl.enableVertexAttribArray(texCoordLoc);
     gl.vertexAttribPointer(texCoordLoc, 2, gl.FLOAT, false, 0, 0);
 
-    // Update texture
     gl.bindTexture(gl.TEXTURE_2D, videoTexture);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, webcamElement);
 
-    // Draw
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
-    // Switch back to main program
     shProgram.Use("main");
 }
 
-/* Initialize the WebGL context. Called from init() */
 function initGL() {
     shProgram.Use("main");
 
@@ -218,10 +199,10 @@ function initGL() {
     stereoCam = new StereoCamera(
         window.renderingParams.eyeSeparation,
         window.renderingParams.convergence,
-        1.3, // aspect ratio of canvas
+        1.3,
         window.renderingParams.fov,
         window.renderingParams.nearClip,
-        20.0 // decimeters
+        20.0
     );
 
     gl.enable(gl.DEPTH_TEST);
@@ -250,9 +231,6 @@ function createProgram(gl, vShader, fShader) {
     return prog;
 }
 
-/**
- * Initialization function that will be called when the page has loaded
- */
 async function init() {
     let canvas;
     try {
@@ -268,7 +246,7 @@ async function init() {
     }
     try {
         await initWebcam();
-        initGL(); // Initialize the WebGL graphics context
+        initGL();
     } catch (e) {
         document.getElementById("canvas-holder").innerHTML =
             "<p>Sorry, could not initialize the WebGL graphics context: " + e + "</p>";
@@ -278,7 +256,6 @@ async function init() {
     video = document.createElement("video");
     video.autoplay = true;
 
-    // Connect to video stream
     let constraints = { video: true };
     navigator.mediaDevices.getUserMedia(constraints).then(function (stream) {
         video.srcObject = stream;
@@ -290,11 +267,32 @@ async function init() {
         console.log(err.name + ": " + err.message);
     });
 
+    const IP_ADDRESS = "192.168.1.244:8080"
+    const WS_URL = `ws://${IP_ADDRESS}/sensor/connect?type=android.sensor.accelerometer`;
+    function connectWebSocket() {
+        ws = new WebSocket(WS_URL);
+        ws.onopen = function() {
+            console.log(`Connected to Sensor Server at ${new Date().toLocaleString("en-US", { timeZone: "Europe/Kiev" })}`);
+        };
+        ws.onmessage = function(event) {
+            let data = JSON.parse(event.data);
+            console.log("Received accelerometer data:", data);
+            updateSensorRotation(data);
+        };
+        ws.onerror = function(error) {
+            console.error("WebSocket error:", error);
+        };
+        ws.onclose = function(event) {
+            console.log(`Disconnected from Sensor Server. Code: ${event.code}, Reason: ${event.reason}`);
+            setTimeout(connectWebSocket, 2000);
+        };
+    }
+    connectWebSocket();
+
     setInterval(draw, 1000 / 20); // 20 FPS
 
     spaceball = new TrackballRotator(canvas, draw, 0);
 
-    // Expose update function to global scope
     window.updateParams = function() {
         const eyeSeparation = parseFloat(document.getElementById("eyeSeparation").value);
         const fov = parseFloat(document.getElementById("fov").value) * Math.PI / 180;
@@ -308,21 +306,50 @@ async function init() {
         document.getElementById("nearClipValue").textContent = nearClip.toFixed(1);
         document.getElementById("convergenceValue").textContent = convergence.toFixed(1);
 
-        // Reinitialize stereoCam with new parameters
         stereoCam = new StereoCamera(
             window.renderingParams.eyeSeparation,
             window.renderingParams.convergence,
-            1.3, // aspect ratio
+            1.3,
             window.renderingParams.fov,
             window.renderingParams.nearClip,
             20.0
         );
 
-        if (typeof draw === "function") {
-            console.log("Redrawing with updated params:", window.renderingParams);
-            draw();
-        }
+        draw();
     };
 
     draw();
+}
+
+let sensorRotationMatrix = m4.identity();
+
+function updateSensorRotation(data) {
+    if (data && data.values && Array.isArray(data.values) && data.values.length === 3) {
+        let [ax, ay, az] = data.values;
+
+        let magnitude = Math.sqrt(ax * ax + ay * ay + az * az);
+        if (magnitude > 0.1) {
+            let nx = ax / magnitude;
+            let ny = ay / magnitude;
+            let nz = az / magnitude;
+
+            let pitch = -Math.asin(ny);
+            let roll = Math.atan2(nx, nz);
+
+            let matrix = m4.identity();
+            m4.xRotate(matrix, pitch, matrix);
+            m4.yRotate(matrix, roll, matrix);
+
+            sensorRotationMatrix = m4.copy(matrix);
+        } else {
+            console.warn("Accelerometer magnitude too low, resetting to identity matrix");
+            sensorRotationMatrix = m4.identity();
+        }
+    } else {
+        console.error("Invalid accelerometer data format or length:", data);
+    }
+}
+
+function getSensorRotationMatrix() {
+    return sensorRotationMatrix ? m4.copy(sensorRotationMatrix) : null;
 }
