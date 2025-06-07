@@ -1,4 +1,4 @@
-
+const { cos, sin, sqrt, pow, PI } = Math
 
 function deg2rad(angle) {
     return angle * Math.PI / 180;
@@ -42,79 +42,80 @@ function Model(name) {
     }
 
     this.Draw = function() {
-
-        //gl.drawArrays(gl.LINE_STRIP, 0, this.count);
         gl.drawElements(gl.TRIANGLES, this.count, gl.UNSIGNED_SHORT, 0);
     }
 
     this.DrawWireframe = function() {
-
         for (let p=0; p<this.count; p+=3)
-            gl.drawElements(gl.LINE_LOOP, 3, gl.UNSIGNED_SHORT, p);
+            gl.drawElements(gl.LINE_LOOP, 3, gl.UNSIGNED_SHORT, p*2);
     }
 }
 
 
-function CreateSurfaceData(data)
-{
+function CreateSurfaceData(data) {
+    const a = 20;
+    const b = 20;
+    const scaler = 0.1;
+    const NUM_STEPS_BETA = 30;
+    const NUM_STEPS_Z = 20;
+    const MAX_BETA = Math.PI * 2;
+    const MAX_Z = 20;
+    const STEP_BETA = MAX_BETA / NUM_STEPS_BETA;
+    const STEP_Z = MAX_Z / NUM_STEPS_Z;
+
+    function r(z) {
+        return z * Math.sqrt(z * (a - z)) / b;
+    }
+
+    function pearVertex(z, beta) {
+        let x = r(z) * Math.sin(beta),
+            y = r(z) * Math.cos(beta),
+            cZ = z;
+        return [scaler * x, scaler * y, scaler * cZ];
+    }
+
     let vertices = [];
-    let triangles = [];
+    let normals = [];
+    let indices = [];
 
-    for (let i=0, ang = 0; i<72; i++, ang+=5) {
-        vertices.push( new Vertex( [Math.sin(deg2rad(ang)), 0, Math.cos(deg2rad(ang))] ));
-    }
+    for (let zi = 0; zi <= NUM_STEPS_Z; zi++) {
+        const z = 1 + (zi * STEP_Z);
+        for (let bi = 0; bi <= NUM_STEPS_BETA; bi++) {
+            const beta = bi * STEP_BETA;
+            const vertex = pearVertex(z, beta);
+            vertices.push(...vertex);
 
-    for (let i=0, ang = 0; i<72; i++, ang+=5) {
+            // Calculate normal (simplified)
+            const nextZ = zi < NUM_STEPS_Z ? pearVertex(z + STEP_Z, beta) : vertex;
+            const nextBeta = bi < NUM_STEPS_BETA ? pearVertex(z, beta + STEP_BETA) : vertex;
 
-        let v0ind = vertices.length;
-        vertices.push( new Vertex( [Math.sin(deg2rad(ang)), 1, Math.cos(deg2rad(ang))] ));
+            const dz = [nextZ[0] - vertex[0], nextZ[1] - vertex[1], nextZ[2] - vertex[2]];
+            const db = [nextBeta[0] - vertex[0], nextBeta[1] - vertex[1], nextBeta[2] - vertex[2]];
 
-        // v0    v2 
-        //   o - o
-        //   | \ |
-        //   o - o
-        // v3     v1
+            const normal = [
+                dz[1] * db[2] - dz[2] * db[1],
+                dz[2] * db[0] - dz[0] * db[2],
+                dz[0] * db[1] - dz[1] * db[0]
+            ];
 
-        if (i > 0)
-        {
-            let v1ind = v0ind - 72 -1;
-            let v2ind = v0ind - 1;
-            let v3ind = v0ind - 72
-
-            let trian = new Triangle(v0ind, v1ind, v2ind);
-            let trianInd = triangles.length;
-
-            triangles.push( trian );
-            vertices[v0ind].triangles.push(trianInd);
-            vertices[v1ind].triangles.push(trianInd);
-            vertices[v2ind].triangles.push(trianInd);
-
-            let trian2 = new Triangle(v0ind, v3ind, v1ind);
-            let trianInd2 = triangles.length;
-
-            triangles.push( trian2 );
-            vertices[v0ind].triangles.push(trianInd2);
-            vertices[v3ind].triangles.push(trianInd2);
-            vertices[v1ind].triangles.push(trianInd2);
-
+            const len = Math.sqrt(normal[0]**2 + normal[1]**2 + normal[2]**2);
+            normals.push(normal[0]/len, normal[1]/len, normal[2]/len);
         }
-
     }
 
-    data.verticesF32 = new Float32Array(vertices.length*3);
-    for (let i=0, len=vertices.length; i<len; i++)
-    {
-        data.verticesF32[i*3 + 0] = vertices[i].p[0];
-        data.verticesF32[i*3 + 1] = vertices[i].p[1];
-        data.verticesF32[i*3 + 2] = vertices[i].p[2];
+    for (let zi = 0; zi < NUM_STEPS_Z; zi++) {
+        for (let bi = 0; bi < NUM_STEPS_BETA; bi++) {
+            const i0 = zi * (NUM_STEPS_BETA + 1) + bi;
+            const i1 = i0 + 1;
+            const i2 = (zi + 1) * (NUM_STEPS_BETA + 1) + bi;
+            const i3 = i2 + 1;
+
+            indices.push(i0, i1, i2);
+            indices.push(i1, i3, i2);
+        }
     }
 
-    data.indicesU16 = new Uint16Array(triangles.length*3);
-    for (let i=0, len=triangles.length; i<len; i++)
-    {
-        data.indicesU16[i*3 + 0] = triangles[i].v0;
-        data.indicesU16[i*3 + 1] = triangles[i].v1;
-        data.indicesU16[i*3 + 2] = triangles[i].v2;
-    }
-
+    data.verticesF32 = new Float32Array(vertices);
+    data.normalsF32 = new Float32Array(normals);
+    data.indicesU16 = new Uint16Array(indices);
 }

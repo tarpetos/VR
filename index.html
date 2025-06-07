@@ -14,20 +14,67 @@
 <script src="./shader.gpu"></script>
 <script src="./Model.js"></script>
 <script src="./StereoCamera.js"></script>
+<script src="./Texture.js"></script>
 <script src="./main.js"></script>
 
 </head>
 <body onload="init()">
 
-<h2>A Cube with "Trackball" Mouse Rotation</h2>
+<h2>A Surface of Conjugation of Two Coaxial Cylinders of Different Diameters with "Trackball" Mouse Rotation</h2>
 
-<p id="message">Drag your mouse on the cube to rotate it.<br>
-(On a touch screen, you can use your finger.)</p>
+<p id="message">Drag your mouse on the shape to rotate it.<br>
+    (On a touch screen, you can use your finger.)</p>
 
+<div style="margin-top: 20px; display: flex; flex-direction: column; gap: 10px">
+    <div>
+        <label for="esRange">Eye separation: <span id="esrangeValue">0.5</span></label>
+        <input type="range" id="esRange" name="esRange" min="0.1" max="20" value="0.5" step="0.1" oninput="updateesRange(this.value)"/>
+    </div>
+    
+    <div>
+        <label for="fovRange">FOV: <span id="fovrangeValue">19</span></label>
+        <input type="range" id="fovRange" name="fovRange" min="10" max="120" value="45" oninput="updatefovRange(this.value)"/>
+    </div>
+    
+    <div>
+        <label for="ncdRange">Near Clipping Distance: <span id="ncdrangeValue">8.0</span></label>
+        <input type="range" id="ncdRange" name="ncdRange" min="0.1" max="10.0" value="8.0" step="0.1" oninput="updatencdRange(this.value)"/>
+    </div>
+    
+    <div>
+        <label for="cdRange">Convergence Distance: <span id="cdrangeValue">8.7</span></label>
+        <input type="range" id="cdRange" name="cdRange" min="5.0" max="20.0" value="10.0" step="0.1" oninput="updatecdRange(this.value)"/>
+    </div>
+</div>
+    
+<script>
+    function updateesRange(value) {
+        document.getElementById("esrangeValue").textContent = value;
+        stereoCam.eyeSeparation = +value;
+    }
+    
+    function updatefovRange(value) {
+        document.getElementById("fovrangeValue").textContent = value;
+        stereoCam.FOV = (+value) * Math.PI / 180;
+    }
+    
+    function updatencdRange(value) {
+        document.getElementById("ncdrangeValue").textContent = value;
+        stereoCam.nearClippingDistance = +value;
+    }
+    
+    function updatecdRange(value) {
+        document.getElementById("cdrangeValue").textContent = value;
+        stereoCam.convergence = +value;
+    }
+</script>
 
-<div id="canvas-holder">
-   <canvas width="600" height="600" id="webglcanvas" style="background-color:red"></canvas>
+<div>
+    <video id="webcam" style="display: none" autoplay playsinline></video>
 </div>
 
+<div id="canvas-holder" >
+   <canvas width="600" height="600" id="webglcanvas" style="background-color:red"></canvas>
+</div>
 
 </body></html>
