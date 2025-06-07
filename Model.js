@@ -53,49 +53,48 @@ function Model(name) {
 
 
 function CreateSurfaceData(data) {
-    const a = 20;
-    const b = 20;
-    const scaler = 0.1;
-    const NUM_STEPS_BETA = 30;
-    const NUM_STEPS_Z = 20;
-    const MAX_BETA = Math.PI * 2;
-    const MAX_Z = 20;
-    const STEP_BETA = MAX_BETA / NUM_STEPS_BETA;
-    const STEP_Z = MAX_Z / NUM_STEPS_Z;
+    const m = 6;
+    const b = 6;
+    const a = 4;
+    const n = 0.5;
+    const phi = 0;
+    const omega = m * Math.PI / b;
+    const scaler = 0.3;
+    const NUM_STEPS_U = 30; // Fixed value instead of slider
+    const NUM_STEPS_R = 20; // Fixed value instead of slider
+    const MAX_U = Math.PI * 2;
+    const MAX_R = b;
+    const STEP_U = MAX_U / NUM_STEPS_U;
+    const STEP_R = MAX_R / NUM_STEPS_R;
 
-    function r(z) {
-        return z * Math.sqrt(z * (a - z)) / b;
-    }
-
-    function pearVertex(z, beta) {
-        let x = r(z) * Math.sin(beta),
-            y = r(z) * Math.cos(beta),
-            cZ = z;
-        return [scaler * x, scaler * y, scaler * cZ];
+    function surfaceVertex(r, u) {
+        const x = r * Math.cos(u);
+        const y = r * Math.sin(u);
+        const z = a * Math.exp(-n * r) * Math.sin(omega * r + phi);
+        return [scaler * x, scaler * y, scaler * z];
     }
 
     let vertices = [];
     let normals = [];
     let indices = [];
 
-    for (let zi = 0; zi <= NUM_STEPS_Z; zi++) {
-        const z = 1 + (zi * STEP_Z);
-        for (let bi = 0; bi <= NUM_STEPS_BETA; bi++) {
-            const beta = bi * STEP_BETA;
-            const vertex = pearVertex(z, beta);
+    for (let ri = 0; ri <= NUM_STEPS_R; ri++) {
+        const r = ri * STEP_R;
+        for (let ui = 0; ui <= NUM_STEPS_U; ui++) {
+            const u = ui * STEP_U;
+            const vertex = surfaceVertex(r, u);
             vertices.push(...vertex);
 
-            // Calculate normal (simplified)
-            const nextZ = zi < NUM_STEPS_Z ? pearVertex(z + STEP_Z, beta) : vertex;
-            const nextBeta = bi < NUM_STEPS_BETA ? pearVertex(z, beta + STEP_BETA) : vertex;
+            const nextR = ri < NUM_STEPS_R ? surfaceVertex(r + STEP_R, u) : vertex;
+            const nextU = ui < NUM_STEPS_U ? surfaceVertex(r, u + STEP_U) : vertex;
 
-            const dz = [nextZ[0] - vertex[0], nextZ[1] - vertex[1], nextZ[2] - vertex[2]];
-            const db = [nextBeta[0] - vertex[0], nextBeta[1] - vertex[1], nextBeta[2] - vertex[2]];
+            const dr = [nextR[0] - vertex[0], nextR[1] - vertex[1], nextR[2] - vertex[2]];
+            const du = [nextU[0] - vertex[0], nextU[1] - vertex[1], nextU[2] - vertex[2]];
 
             const normal = [
-                dz[1] * db[2] - dz[2] * db[1],
-                dz[2] * db[0] - dz[0] * db[2],
-                dz[0] * db[1] - dz[1] * db[0]
+                dr[1] * du[2] - dr[2] * du[1],
+                dr[2] * du[0] - dr[0] * du[2],
+                dr[0] * du[1] - dr[1] * du[0]
             ];
 
             const len = Math.sqrt(normal[0]**2 + normal[1]**2 + normal[2]**2);
@@ -103,11 +102,11 @@ function CreateSurfaceData(data) {
         }
     }
 
-    for (let zi = 0; zi < NUM_STEPS_Z; zi++) {
-        for (let bi = 0; bi < NUM_STEPS_BETA; bi++) {
-            const i0 = zi * (NUM_STEPS_BETA + 1) + bi;
+    for (let ri = 0; ri < NUM_STEPS_R; ri++) {
+        for (let ui = 0; ui < NUM_STEPS_U; ui++) {
+            const i0 = ri * (NUM_STEPS_U + 1) + ui;
             const i1 = i0 + 1;
-            const i2 = (zi + 1) * (NUM_STEPS_BETA + 1) + bi;
+            const i2 = (ri + 1) * (NUM_STEPS_U + 1) + ui;
             const i3 = i2 + 1;
 
             indices.push(i0, i1, i2);
