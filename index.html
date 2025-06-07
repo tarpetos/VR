@@ -1,88 +1,236 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-
-
-    <title>PA#1</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Surface of Revolution With Damping Circular Waves</title>
     <style>
         body {
-            background-color: #EEEEEE;
+            font-family: "Arial", sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #1a1a1a;
+            color: #e0e0e0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+        h2 {
+            font-size: 2.5em;
+            color: #00ccff;
+            text-align: center;
+            margin: 20px 0;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+            width: 100%;
+        }
+        p {
+            font-size: 1.2em;
+            text-align: center;
+            margin: 10px 0;
+            color: #b3b3b3;
+            width: 100%;
+        }
+        .main-container {
+            display: flex;
+            flex-direction: row;
+            align-items: flex-start;
+            max-width: 1400px;
+            width: 100%;
+            justify-content: center;
+        }
+        .video-container {
+            display: none;
+        }
+        video {
+            border: 2px solid #00ccff;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 204, 255, 0.3);
+            max-width: 100%;
+            height: auto;
+        }
+        #canvas-holder {
+            flex: 2;
+            text-align: center;
+            margin: 0 20px;
+            padding: 20px;
+        }
+        canvas {
+            border: 2px solid #00ccff;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0, 204, 255, 0.3);
+        }
+        .controls {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            width: 100%;
+            max-width: 300px;
+            margin: 20px 0;
+            padding: 20px;
+            background-color: #2c2c2c;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+        }
+        .controls label {
+            font-size: 1.1em;
+            color: #00ccff;
+            margin-bottom: 5px;
+            width: 100%;
+            text-align: left;
+        }
+        .controls input[type="range"] {
+            width: 100%;
+            margin-bottom: 10px;
+            accent-color: #00ccff;
+            transition: background-color 0.3s;
+        }
+        .controls input[type="range"]:hover {
+            accent-color: #ff4444;
+        }
+        .controls span {
+            font-size: 1.1em;
+            color: #ffffff;
+            margin-left: 10px;
+        }
+        #resetButton {
+            background-color: #ff4444;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 1.1em;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s, transform 0.2s;
+            margin-top: 10px;
+            align-self: center;
+        }
+        #resetButton:hover {
+            background-color: #cc0000;
+            transform: scale(1.05);
+        }
+        #webcam-status {
+            color: #ff4444;
+            margin-top: 10px;
+            font-size: 1.1em;
+            text-align: center;
+            width: 100%;
+        }
+        @media (max-width: 900px) {
+            .main-container {
+                flex-direction: column;
+                align-items: center;
+            }
+            .video-container, #canvas-holder, .controls {
+                flex: none;
+                width: 90%;
+                max-width: none;
+                margin: 10px 0;
+            }
+            video {
+                max-height: 300px;
+            }
+            h2 {
+                font-size: 2em;
+            }
+            p {
+                font-size: 1em;
+            }
         }
     </style>
-
-    <script src="./Utils/trackball-rotator.js"></script>
-    <script src="./Utils/m4.js"></script>
-    <script src="./shader.gpu"></script>
-    <script src="./Model.js"></script>
-    <script src="./StereoCamera.js"></script>
-    <script src="./Texture.js"></script>
-    <script src="./main.js"></script>
-
 </head>
-<body onload="init()">
-
-<h2>Surface of Revolution With Damping Circular Waves with "Trackball" Mouse Rotation</h2>
-
-<p id="message">
-    Drag your mouse on the shape to rotate it.<br>(On a touch screen, you can use your finger.)
-</p>
-
-<div style="margin-top: 20px; display: flex; flex-direction: column; gap: 10px">
-    <div>
-        <label for="esRange">Eye separation: <span id="esrangeValue">0.5</span></label>
-        <input type="range" id="esRange" name="esRange" min="0.1" max="20" value="0.5" step="0.1"
-               oninput="updateesRange(this.value)"/>
+<body>
+    <h2>Surface of Revolution With Damping Circular Waves</h2>
+    <p>Drag your mouse on the shape to rotate it. (On a touch screen, use your finger.)</p>
+    <p>Wear red-cyan anaglyph glasses to view the stereo effect.</p>
+    <div class="main-container">
+        <div class="video-container">
+            <video id="webcam" autoplay playsinline></video>
+        </div>
+        <div id="canvas-holder">
+            <canvas id="webglcanvas" width="800" height="600"></canvas>
+        </div>
+        <div class="controls">
+            <div>
+                <label>Eye Separation (decimeters):</label>
+                <input type="range" id="eyeSeparation" min="0.1" max="20.0" step="0.01" value="0.5">
+                <span id="eyeSeparationValue">0.5</span>
+            </div>
+            <div>
+                <label>Field of View (degrees):</label>
+                <input type="range" id="fov" min="10" max="60" step="1" value="50">
+                <span id="fovValue">50</span>
+            </div>
+            <div>
+                <label>Near Clipping Distance (decimeters):</label>
+                <input type="range" id="nearClip" min="1.0" max="15.0" step="0.1" value="8.0">
+                <span id="nearClipValue">8.0</span>
+            </div>
+            <div>
+                <label>Convergence Distance (decimeters):</label>
+                <input type="range" id="convergence" min="1.0" max="15.0" step="0.1" value="8.5">
+                <span id="convergenceValue">8.5</span>
+            </div>
+            <button id="resetButton">Reset Parameters</button>
+        </div>
     </div>
+    <div id="webcam-status">Webcam status: Not initialized</div>
 
-    <div>
-        <label for="fovRange">FOV: <span id="fovrangeValue">19</span></label>
-        <input type="range" id="fovRange" name="fovRange" min="10" max="120" value="45"
-               oninput="updatefovRange(this.value)"/>
-    </div>
+    <script src="Utils/m4.js"></script>
+    <script src="Utils/trackball-rotator.js"></script>
+    <script src="Texture.js"></script>
+    <script src="StereoCamera.js"></script>
+    <script src="Model.js"></script>
+    <script src="shader.gpu"></script>
+    <script src="main.js"></script>
 
-    <div>
-        <label for="ncdRange">Near Clipping Distance: <span id="ncdrangeValue">8.0</span></label>
-        <input type="range" id="ncdRange" name="ncdRange" min="0.1" max="10.0" value="8.0" step="0.1"
-               oninput="updatencdRange(this.value)"/>
-    </div>
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            const statusDiv = document.getElementById("webcam-status");
 
-    <div>
-        <label for="cdRange">Convergence Distance: <span id="cdrangeValue">8.7</span></label>
-        <input type="range" id="cdRange" name="cdRange" min="5.0" max="20.0" value="10.0" step="0.1"
-               oninput="updatecdRange(this.value)"/>
-    </div>
-</div>
+            document.getElementById("eyeSeparation").addEventListener("input", function() {
+                console.log("Eye Separation changed to:", this.value);
+                if (window.updateParams) window.updateParams();
+            });
+            document.getElementById("fov").addEventListener("input", function() {
+                console.log("FOV changed to:", this.value);
+                if (window.updateParams) window.updateParams();
+            });
+            document.getElementById("nearClip").addEventListener("input", function() {
+                console.log("Near Clip changed to:", this.value);
+                if (window.updateParams) window.updateParams();
+            });
+            document.getElementById("convergence").addEventListener("input", function() {
+                console.log("Convergence changed to:", this.value);
+                if (window.updateParams) window.updateParams();
+            });
+            document.getElementById("resetButton").addEventListener("click", function() {
+                console.log("Resetting parameters");
+                document.getElementById("eyeSeparation").value = 0.5;
+                document.getElementById("fov").value = 50;
+                document.getElementById("nearClip").value = 8.0;
+                document.getElementById("convergence").value = 8.5;
+                if (window.updateParams) window.updateParams();
+            });
 
-<script>
-    function updateesRange(value) {
-        document.getElementById("esrangeValue").textContent = value;
-        stereoCam.eyeSeparation = +value;
-    }
+            if (typeof init === "function") {
+                init().then(() => {
+                    statusDiv.textContent = "Webcam status: Initialized";
+                    statusDiv.style.color = "green";
+                }).catch(error => {
+                    statusDiv.textContent = `Webcam status: Error - ${error.message}`;
+                    console.error("Init error:", error);
+                });
+            } else {
+                console.error("init function not found.");
+            }
 
-    function updatefovRange(value) {
-        document.getElementById("fovrangeValue").textContent = value;
-        stereoCam.FOV = (+value) * Math.PI / 180;
-    }
-
-    function updatencdRange(value) {
-        document.getElementById("ncdrangeValue").textContent = value;
-        stereoCam.nearClippingDistance = +value;
-    }
-
-    function updatecdRange(value) {
-        document.getElementById("cdrangeValue").textContent = value;
-        stereoCam.convergence = +value;
-    }
-</script>
-
-<div>
-    <video id="webcam" style="display: none" autoplay playsinline></video>
-</div>
-
-<div id="canvas-holder">
-    <canvas width="600" height="600" id="webglcanvas"></canvas>
-</div>
-
+            if (window.isSecureContext === false && window.location.protocol !== "https:") {
+                statusDiv.textContent = "Webcam status: Requires secure context (use HTTPS or localhost)";
+                console.warn("Webcam access requires a secure context. Serve over HTTPS or localhost.");
+            }
+        });
+    </script>
 </body>
 </html>
