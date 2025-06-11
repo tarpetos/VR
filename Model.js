@@ -118,6 +118,3 @@ function CreateSurfaceData(data) {
     data.normalsF32 = new Float32Array(normals);
     data.indicesU16 = new Uint16Array(indices);
 }
-
-// Make CreateSurfaceData globally accessible
-window.CreateSurfaceData = CreateSurfaceData;

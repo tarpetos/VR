@@ -1,93 +1,134 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Surface of Revolution with AR</title>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
-    <script src="https://aframe.io/releases/1.2.0/aframe.min.js"></script>
-    <script src="https://raw.githack.com/jeromeetienne/AR.js/master/aframe/build/aframe-ar.js"></script>
+    <meta charset="UTF-8">
+    <title>Control Task</title>
     <style>
-        body { margin: 0; padding: 0; overflow: hidden; }
-        #info { position: absolute; top: 10px; left: 10px; color: white; }
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+            position: fixed;
+            top: 0;
+            left: 0;
+        }
     </style>
-    <!-- Optional: Add a dummy favicon to avoid 404 -->
-    <link rel="icon" href="data:;base64,iVBORw0KGgo=">
 </head>
 <body>
-    <!-- Shader Sources -->
-    <script>
-        const vertexShaderSource = `attribute vec3 vertex;
-uniform mat4 modelViewMatrix;
-uniform mat4 projectionMatrix;
 
-void main() {
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(vertex, 1.0);
-}`;
+<script src="https://unpkg.com/three@0.127.0/build/three.min.js"></script>
+<script src="https://raw.githack.com/jeromeetienne/AR.js/1.7.2/three.js/build/ar.js"></script>
+<script src="Model.js"></script>
 
-        const fragmentShaderSource = `#ifdef GL_FRAGMENT_PRECISION_HIGH
-   precision highp float;
-#else
-   precision mediump float;
-#endif
+<script>
+    const renderer = new THREE.WebGLRenderer({alpha: true});
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
 
-uniform vec4 color;
-void main() {
-    gl_FragColor = color;
-}`;
-    </script>
+    const scene = new THREE.Scene();
+    const camera = new THREE.Camera();
+    scene.add(camera);
 
-    <!-- Component Definition -->
-    <script src="js/Model.js"></script>
-    <script src="js/main.js"></script>
-    <script src="js/StereoCamera.js"></script>
-    <script src="js/Texture.js"></script>
-    <script src="js/trackball-rotator.js"></script>
-    <script src="js/m4.js"></script>
-    <script>
-        AFRAME.registerComponent('custom-surface', {
-            init: function () {
-                const marker = this.el;
-                if (typeof CreateSurfaceData === 'undefined') {
-                    console.error('CreateSurfaceData is not defined. Check Model.js loading.');
-                    return;
-                }
-                const data = {};
-                CreateSurfaceData(data);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    directionalLight.position.set(0, 1, 1);
+    scene.add(ambientLight, directionalLight);
 
-                // Create a custom geometry based on your surface data
-                const geometry = new THREE.BufferGeometry();
-                geometry.setIndex(new THREE.BufferAttribute(data.indicesU16, 1));
-                geometry.setAttribute('position', new THREE.BufferAttribute(data.verticesF32, 3));
-                geometry.computeVertexNormals();
+    const arToolkitSource = new THREEx.ArToolkitSource({sourceType: 'webcam'});
+    arToolkitSource.init(() => setTimeout(onResize, 1000));
+    window.addEventListener('resize', onResize);
 
-                // Define the custom material with your shaders
-                const customMaterial = new THREE.ShaderMaterial({
-                    vertexShader: vertexShaderSource,
-                    fragmentShader: fragmentShaderSource,
-                    uniforms: {
-                        color: { value: new THREE.Vector4(0.5, 0.5, 0.5, 1) }
-                    }
-                });
+    function onResize() {
+        arToolkitSource.onResizeElement();
+        arToolkitSource.copyElementSizeTo(renderer.domElement);
+        if (arToolkitContext.arController) {
+            arToolkitSource.copyElementSizeTo(arToolkitContext.arController.canvas);
+        }
+    }
 
-                const mesh = new THREE.Mesh(geometry, customMaterial);
+    const arToolkitContext = new THREEx.ArToolkitContext({
+        cameraParametersUrl: 'https://raw.githack.com/jeromeetienne/AR.js/1.7.2/data/data/camera_para.dat',
+        detectionMode: 'mono',
+    });
 
-                // Scale and position the mesh appropriately
-                mesh.scale.set(0.3, 0.3, 0.3); // Adjust scale to fit marker
-                mesh.position.set(0, 0, 0); // Centered on marker
+    arToolkitContext.init(() => {
+        camera.projectionMatrix.copy(arToolkitContext.getProjectionMatrix());
+    });
 
-                marker.object3D.add(mesh);
+    const markerRoot = new THREE.Group();
+    scene.add(markerRoot);
+
+    new THREEx.ArMarkerControls(arToolkitContext, markerRoot, {
+        type: 'pattern',
+        patternUrl: 'pattern-hevlich.patt',
+    });
+
+    scene.visible = false;
+
+    const surfaceData = {};
+    CreateSurfaceData(surfaceData);
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(surfaceData.verticesF32, 3));
+    geometry.setAttribute('normal', new THREE.BufferAttribute(surfaceData.normalsF32, 3));
+    geometry.setIndex(new THREE.BufferAttribute(surfaceData.indicesU16, 1));
+    geometry.computeVertexNormals();
+
+    const material = new THREE.ShaderMaterial({
+        vertexShader: `
+            varying vec3 vPosition;
+            void main() {
+                vPosition = position;
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
             }
-        });
-    </script>
+        `,
+        fragmentShader: `
+            varying vec3 vPosition;
+            void main() {
+                float t = (vPosition.y + 0.5) / 1.0;
+                vec3 color1 = vec3(0.18, 0.49, 0.20);
+                vec3 color2 = vec3(0.65, 0.84, 0.65);
+                vec3 color = mix(color1, color2, t);
+                gl_FragColor = vec4(color, 1.0);
+            }
+        `,
+        side: THREE.DoubleSide
+    });
 
-    <!-- Scene -->
-    <a-scene embedded arjs="sourceType: webcam; debugUIEnabled: false; trackingMethod: best;">
-        <a-marker preset="custom" type="pattern" url="pattern-fractal1.patt" custom-surface>
-            <!-- Optional: Remove or adjust the box entity if not needed -->
-            <!-- <a-entity geometry="primitive: box; width: 0.5; height: 0.5; depth: 0.5" material="color: red"></a-entity> -->
-        </a-marker>
-        <a-entity camera></a-entity>
-    </a-scene>
-    <div id="info">Point your camera at the printed pattern.</div>
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.scale.set(0.3, 0.3, 0.3);
+    mesh.position.y = 0;
+    markerRoot.add(mesh);
+
+    const onRenderFcts = [
+        (delta, now) => {
+            if (!arToolkitSource.ready) return;
+            arToolkitContext.update(arToolkitSource.domElement);
+            scene.visible = camera.visible;
+        },
+        (delta, now) => {
+            renderer.render(scene, camera);
+        }
+    ];
+
+    let lastTimeMsec = null;
+
+    function animate(nowMsec) {
+        requestAnimationFrame(animate);
+        lastTimeMsec = lastTimeMsec || nowMsec - 1000 / 60;
+        const deltaMsec = Math.min(200, nowMsec - lastTimeMsec);
+        lastTimeMsec = nowMsec;
+        onRenderFcts.forEach(fn => fn(deltaMsec / 1000, nowMsec / 1000));
+    }
+
+    requestAnimationFrame(animate);
+</script>
+
 </body>
 </html>
