@@ -60,8 +60,8 @@ function CreateSurfaceData(data) {
     const phi = 0;
     const omega = m * Math.PI / b;
     const scaler = 0.3;
-    const NUM_STEPS_U = 30; // Fixed value instead of slider
-    const NUM_STEPS_R = 20; // Fixed value instead of slider
+    const NUM_STEPS_U = 30;
+    const NUM_STEPS_R = 20;
     const MAX_U = Math.PI * 2;
     const MAX_R = b;
     const STEP_U = MAX_U / NUM_STEPS_U;
@@ -118,3 +118,6 @@ function CreateSurfaceData(data) {
     data.normalsF32 = new Float32Array(normals);
     data.indicesU16 = new Uint16Array(indices);
 }
+
+// Make CreateSurfaceData globally accessible
+window.CreateSurfaceData = CreateSurfaceData;

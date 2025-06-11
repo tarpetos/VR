@@ -1,236 +1,93 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Surface of Revolution With Damping Circular Waves</title>
+    <title>Surface of Revolution with AR</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+    <script src="https://aframe.io/releases/1.2.0/aframe.min.js"></script>
+    <script src="https://raw.githack.com/jeromeetienne/AR.js/master/aframe/build/aframe-ar.js"></script>
     <style>
-        body {
-            font-family: "Arial", sans-serif;
-            margin: 0;
-            padding: 0;
-            background-color: #1a1a1a;
-            color: #e0e0e0;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            min-height: 100vh;
-        }
-        h2 {
-            font-size: 2.5em;
-            color: #00ccff;
-            text-align: center;
-            margin: 20px 0;
-            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
-            width: 100%;
-        }
-        p {
-            font-size: 1.2em;
-            text-align: center;
-            margin: 10px 0;
-            color: #b3b3b3;
-            width: 100%;
-        }
-        .main-container {
-            display: flex;
-            flex-direction: row;
-            align-items: flex-start;
-            max-width: 1400px;
-            width: 100%;
-            justify-content: center;
-        }
-        .video-container {
-            display: none;
-        }
-        video {
-            border: 2px solid #00ccff;
-            border-radius: 10px;
-            box-shadow: 0 4px 8px rgba(0, 204, 255, 0.3);
-            max-width: 100%;
-            height: auto;
-        }
-        #canvas-holder {
-            flex: 2;
-            text-align: center;
-            margin: 0 20px;
-            padding: 20px;
-        }
-        canvas {
-            border: 2px solid #00ccff;
-            border-radius: 10px;
-            box-shadow: 0 4px 12px rgba(0, 204, 255, 0.3);
-        }
-        .controls {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            align-items: flex-start;
-            width: 100%;
-            max-width: 300px;
-            margin: 20px 0;
-            padding: 20px;
-            background-color: #2c2c2c;
-            border-radius: 10px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-        }
-        .controls label {
-            font-size: 1.1em;
-            color: #00ccff;
-            margin-bottom: 5px;
-            width: 100%;
-            text-align: left;
-        }
-        .controls input[type="range"] {
-            width: 100%;
-            margin-bottom: 10px;
-            accent-color: #00ccff;
-            transition: background-color 0.3s;
-        }
-        .controls input[type="range"]:hover {
-            accent-color: #ff4444;
-        }
-        .controls span {
-            font-size: 1.1em;
-            color: #ffffff;
-            margin-left: 10px;
-        }
-        #resetButton {
-            background-color: #ff4444;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            font-size: 1.1em;
-            border-radius: 5px;
-            cursor: pointer;
-            transition: background-color 0.3s, transform 0.2s;
-            margin-top: 10px;
-            align-self: center;
-        }
-        #resetButton:hover {
-            background-color: #cc0000;
-            transform: scale(1.05);
-        }
-        #webcam-status {
-            color: #ff4444;
-            margin-top: 10px;
-            font-size: 1.1em;
-            text-align: center;
-            width: 100%;
-        }
-        @media (max-width: 900px) {
-            .main-container {
-                flex-direction: column;
-                align-items: center;
-            }
-            .video-container, #canvas-holder, .controls {
-                flex: none;
-                width: 90%;
-                max-width: none;
-                margin: 10px 0;
-            }
-            video {
-                max-height: 300px;
-            }
-            h2 {
-                font-size: 2em;
-            }
-            p {
-                font-size: 1em;
-            }
-        }
+        body { margin: 0; padding: 0; overflow: hidden; }
+        #info { position: absolute; top: 10px; left: 10px; color: white; }
     </style>
+    <!-- Optional: Add a dummy favicon to avoid 404 -->
+    <link rel="icon" href="data:;base64,iVBORw0KGgo=">
 </head>
 <body>
-    <h2>Surface of Revolution With Damping Circular Waves</h2>
-    <p>Drag your mouse on the shape to rotate it. (On a touch screen, use your finger.)</p>
-    <p>Wear red-cyan anaglyph glasses to view the stereo effect.</p>
-    <div class="main-container">
-        <div class="video-container">
-            <video id="webcam" autoplay playsinline></video>
-        </div>
-        <div id="canvas-holder">
-            <canvas id="webglcanvas" width="800" height="600"></canvas>
-        </div>
-        <div class="controls">
-            <div>
-                <label>Eye Separation (decimeters):</label>
-                <input type="range" id="eyeSeparation" min="0.1" max="20.0" step="0.01" value="0.5">
-                <span id="eyeSeparationValue">0.5</span>
-            </div>
-            <div>
-                <label>Field of View (degrees):</label>
-                <input type="range" id="fov" min="10" max="60" step="1" value="50">
-                <span id="fovValue">50</span>
-            </div>
-            <div>
-                <label>Near Clipping Distance (decimeters):</label>
-                <input type="range" id="nearClip" min="1.0" max="15.0" step="0.1" value="8.0">
-                <span id="nearClipValue">8.0</span>
-            </div>
-            <div>
-                <label>Convergence Distance (decimeters):</label>
-                <input type="range" id="convergence" min="1.0" max="15.0" step="0.1" value="8.5">
-                <span id="convergenceValue">8.5</span>
-            </div>
-            <button id="resetButton">Reset Parameters</button>
-        </div>
-    </div>
-    <div id="webcam-status">Webcam status: Not initialized</div>
-
-    <script src="Utils/m4.js"></script>
-    <script src="Utils/trackball-rotator.js"></script>
-    <script src="Texture.js"></script>
-    <script src="StereoCamera.js"></script>
-    <script src="Model.js"></script>
-    <script src="shader.gpu"></script>
-    <script src="main.js"></script>
-
+    <!-- Shader Sources -->
     <script>
-        document.addEventListener("DOMContentLoaded", function() {
-            const statusDiv = document.getElementById("webcam-status");
+        const vertexShaderSource = `attribute vec3 vertex;
+uniform mat4 modelViewMatrix;
+uniform mat4 projectionMatrix;
 
-            document.getElementById("eyeSeparation").addEventListener("input", function() {
-                console.log("Eye Separation changed to:", this.value);
-                if (window.updateParams) window.updateParams();
-            });
-            document.getElementById("fov").addEventListener("input", function() {
-                console.log("FOV changed to:", this.value);
-                if (window.updateParams) window.updateParams();
-            });
-            document.getElementById("nearClip").addEventListener("input", function() {
-                console.log("Near Clip changed to:", this.value);
-                if (window.updateParams) window.updateParams();
-            });
-            document.getElementById("convergence").addEventListener("input", function() {
-                console.log("Convergence changed to:", this.value);
-                if (window.updateParams) window.updateParams();
-            });
-            document.getElementById("resetButton").addEventListener("click", function() {
-                console.log("Resetting parameters");
-                document.getElementById("eyeSeparation").value = 0.5;
-                document.getElementById("fov").value = 50;
-                document.getElementById("nearClip").value = 8.0;
-                document.getElementById("convergence").value = 8.5;
-                if (window.updateParams) window.updateParams();
-            });
+void main() {
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(vertex, 1.0);
+}`;
 
-            if (typeof init === "function") {
-                init().then(() => {
-                    statusDiv.textContent = "Webcam status: Initialized";
-                    statusDiv.style.color = "green";
-                }).catch(error => {
-                    statusDiv.textContent = `Webcam status: Error - ${error.message}`;
-                    console.error("Init error:", error);
+        const fragmentShaderSource = `#ifdef GL_FRAGMENT_PRECISION_HIGH
+   precision highp float;
+#else
+   precision mediump float;
+#endif
+
+uniform vec4 color;
+void main() {
+    gl_FragColor = color;
+}`;
+    </script>
+
+    <!-- Component Definition -->
+    <script src="js/Model.js"></script>
+    <script src="js/main.js"></script>
+    <script src="js/StereoCamera.js"></script>
+    <script src="js/Texture.js"></script>
+    <script src="js/trackball-rotator.js"></script>
+    <script src="js/m4.js"></script>
+    <script>
+        AFRAME.registerComponent('custom-surface', {
+            init: function () {
+                const marker = this.el;
+                if (typeof CreateSurfaceData === 'undefined') {
+                    console.error('CreateSurfaceData is not defined. Check Model.js loading.');
+                    return;
+                }
+                const data = {};
+                CreateSurfaceData(data);
+
+                // Create a custom geometry based on your surface data
+                const geometry = new THREE.BufferGeometry();
+                geometry.setIndex(new THREE.BufferAttribute(data.indicesU16, 1));
+                geometry.setAttribute('position', new THREE.BufferAttribute(data.verticesF32, 3));
+                geometry.computeVertexNormals();
+
+                // Define the custom material with your shaders
+                const customMaterial = new THREE.ShaderMaterial({
+                    vertexShader: vertexShaderSource,
+                    fragmentShader: fragmentShaderSource,
+                    uniforms: {
+                        color: { value: new THREE.Vector4(0.5, 0.5, 0.5, 1) }
+                    }
                 });
-            } else {
-                console.error("init function not found.");
-            }
 
-            if (window.isSecureContext === false && window.location.protocol !== "https:") {
-                statusDiv.textContent = "Webcam status: Requires secure context (use HTTPS or localhost)";
-                console.warn("Webcam access requires a secure context. Serve over HTTPS or localhost.");
+                const mesh = new THREE.Mesh(geometry, customMaterial);
+
+                // Scale and position the mesh appropriately
+                mesh.scale.set(0.3, 0.3, 0.3); // Adjust scale to fit marker
+                mesh.position.set(0, 0, 0); // Centered on marker
+
+                marker.object3D.add(mesh);
             }
         });
     </script>
+
+    <!-- Scene -->
+    <a-scene embedded arjs="sourceType: webcam; debugUIEnabled: false; trackingMethod: best;">
+        <a-marker preset="custom" type="pattern" url="pattern-fractal1.patt" custom-surface>
+            <!-- Optional: Remove or adjust the box entity if not needed -->
+            <!-- <a-entity geometry="primitive: box; width: 0.5; height: 0.5; depth: 0.5" material="color: red"></a-entity> -->
+        </a-marker>
+        <a-entity camera></a-entity>
+    </a-scene>
+    <div id="info">Point your camera at the printed pattern.</div>
 </body>
 </html>
